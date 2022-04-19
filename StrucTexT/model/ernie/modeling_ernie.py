@@ -234,6 +234,7 @@ class PositionwiseFeedForwardLayer(nn.Layer):
 
 
 class ErnieBlock(nn.Layer):
+    # Transformer block
     """ ErnieBlock """
     def __init__(self, cfg, name=None):
         """ __init__ """
@@ -465,6 +466,7 @@ class ErnieModel(nn.Layer):
             embedded = emb_out
         embedded = self.dropout(self.ln(embedded))
 
+        # put through Transformer
         encoded, hidden_list, cache_list = self.encoder_stack(
             embedded, attn_bias, past_cache=past_cache)
         if self.pooler is not None:

@@ -58,6 +58,7 @@ class Model(Encoder):
 
         label = input_data.get('label')
         logit = P.argmax(logit, axis=-1)
+        # NOTE: cls_dict = {'other': 0, 'header': 1, 'question': 2, 'answer': 3}
         mask = label_mask.cast('bool')
 
         selected_logit = P.masked_select(logit, mask)

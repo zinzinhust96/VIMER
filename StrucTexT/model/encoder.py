@@ -196,6 +196,7 @@ class Encoder(ErnieModel):
         batch_size = seq_mask.shape[0]
         max_seqlen = seq_mask.shape[1]
 
+        # text-image embeddings
         token_embeded = self.word_emb(seq_token)
         token_embeded = token_embeded.unbind(axis=0)
 
@@ -217,9 +218,12 @@ class Encoder(ErnieModel):
                                          proposal_w=self.proposal_w)
             roi_feats = P.flatten(roi_feats, start_axis=1) # (B * N, D * H * W)
             image_segments = self.bn(self.proj(roi_feats)) # (B * N, d_model)
+            # lang_emb: language token embedding
+            # image_segments: visual segment embedding
             token_embeded[idx] = P.concat([lang_emb, image_segments, pad_emb]).unsqueeze((0))
         token_embeded = P.concat(token_embeded)
 
+        # layout embeddings
         left_position_embeddings = self.x_position_embeddings(norm_bboxes[:, :, 0])
         upper_position_embeddings = self.y_position_embeddings(norm_bboxes[:, :, 1])
         right_position_embeddings = self.x_position_embeddings(norm_bboxes[:, :, 2])
@@ -229,6 +233,7 @@ class Encoder(ErnieModel):
         layout_embeded = left_position_embeddings + upper_position_embeddings + right_position_embeddings \
                 + lower_position_embeddings + h_position_embeddings + w_position_embeddings
 
+        # segment id embedding
         pos_ids = P.arange(0, max_seqlen, 1, dtype='int64').reshape([1, -1])
         pos_embeded = self.pos_emb(pos_ids)
         line_embeded = self.pos_emb(seq_ids)
@@ -248,6 +253,7 @@ class Encoder(ErnieModel):
         if self.d_spa_pos:
             attn_bias += self._cal_2d_pos_emb(norm_bboxes)
 
+        # put through Ernie Base Transformer
         pooled, encoded = super(Encoder, self).forward(emb_out=embedded, attn_bias=attn_bias)
 
         return encoded, token_embeded
