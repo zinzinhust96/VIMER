@@ -37,14 +37,15 @@ class Model(Encoder):
                 nn.initializer.KaimingNormal())
 
     def kv_mask_gen(self, cls):
+        # mask potential key-value
         mask = P.zeros([cls.shape[0], cls.shape[1], cls.shape[1]], 'int32')
         if len(self.start_cls) == 0:
             return P.ones_like(mask)
         for head, tail in zip(self.start_cls, self.end_cls):
-            head_index = P.cast(cls == head, 'int32')
+            head_index = P.cast(cls == head, 'int32')   # [batch_size, line_num]
             tail_index = P.cast(cls == tail, 'int32')
-            head_index = head_index.unsqueeze(2)
-            tail_index = tail_index.unsqueeze(1).tile((1, tail_index.shape[1], 1))
+            head_index = head_index.unsqueeze(2)    # [batch_size, line_num, 1]
+            tail_index = tail_index.unsqueeze(1).tile((1, tail_index.shape[1], 1))  # [batch_size, line_num, line_num]
             mask += head_index * tail_index
 
         mask = P.cast(mask > 0, 'int32')
@@ -66,11 +67,13 @@ class Model(Encoder):
         seq_ids = input_data.get('sentence_ids')
         seq_mask = input_data.get('sentence_mask')
         cls_label = input_data.pop('cls_label')
-        cls_mask = input_data.pop('label_mask') # [batch_size, line_num, line_num]
+        cls_mask = input_data.pop('label_mask') # [batch_size, line_num]
+        # NOTE: cls_mask: mask sequences in line (not mask <pad>)
         link_mask = cls_mask.unsqueeze(-1).cast('float32') # [batch_size, line_num, 1]
         link_mask = link_mask.matmul(link_mask, transpose_y=True) # [batch_size, line_num, line_num]
         link_mask = link_mask * (1 - P.eye(link_mask.shape[1])).unsqueeze(0)
         link_mask = link_mask.cast('int32')
+        # NOTE: link_mask: (NxN) matrix of 1s with 0s in diagonal
 
         max_line_num = cls_mask.shape[1]
         seq_ids = P.stack([(seq_ids == i).cast('float32') for i in range(1, max_line_num + 1)], axis=1) # [batch, line_num, max_seqlen]
@@ -92,14 +95,14 @@ class Model(Encoder):
         ## later fusion
         encoder_emb = line_logit * lang_logit
 
-        cls_logit = self.label_classifier(encoder_emb)
-        cls_logit = P.argmax(cls_logit, axis=-1)
+        cls_logit = self.label_classifier(encoder_emb)  # [batch_size, line_num, num_labels]
+        cls_logit = P.argmax(cls_logit, axis=-1)        # [batch_size, line_num]
 
         mask = link_mask * self.kv_mask_gen(cls_logit)
 
         ## link loss calculation
         link_emb = encoder_emb.unsqueeze(1).tile((1, encoder_emb.shape[1], 1, 1))
-        link_emb = P.abs(link_emb - link_emb.transpose((0, 2, 1, 3)))
+        link_emb = P.abs(link_emb - link_emb.transpose((0, 2, 1, 3)))   # calculate substract of sequence features --> features of link between two sequences
         link_logit = self.link_classifier(link_emb).squeeze(-1)
         link_logit = F.sigmoid(link_logit) * mask
 

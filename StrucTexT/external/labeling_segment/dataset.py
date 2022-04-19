@@ -108,7 +108,7 @@ def convert_examples_to_features(config, examples, tokenizer, transform=None):
         token_bboxes = examples[idx].get('token_bboxes', [[c] * len(l) for c, l in zip(line_bboxes, seq_tokens)])
         # NOTE: token_bboxes: bboxes of each sequence
         acc_len = list(accumulate([len(_flatten_2d_list(c)) for c in seq_tokens]))
-        # NOTE: acc_len: accumulate token length of sequences ([2,4,7])
+        # NOTE: acc_len: accumulate number of tokens in sequences ([2,4,7])
         buf_a = [l for c, l in enumerate(acc_len, 3) if c + l < max_seqlen] # [cls] + ... + [doc] + num(line)
         line_len = len(buf_a)
         line_bboxes = line_bboxes[:line_len]
@@ -168,7 +168,7 @@ def convert_examples_to_features(config, examples, tokenizer, transform=None):
         sentence_bboxes[idx, token_len:token_len + line_len] = line_bboxes
         sentence_bboxes[idx] *= im_scale
 
-    # NOTE: get max length of all lines to construct label
+    # NOTE: get max length (number of sequences) of all lines to construct label
     max_vislen = max(line_nums) - 1
     label = label[:, :max_vislen]
     label_mask = label_mask[:, :max_vislen]
